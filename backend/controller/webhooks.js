@@ -13,7 +13,7 @@ export const clerkWebhooks = async(req,res)=>{
         })
 
         const {data,type} = req.body;
-         console.log(data);
+         console.log("recived data",data);
         switch(type){
              case 'user.created':{
                  const  userData ={
