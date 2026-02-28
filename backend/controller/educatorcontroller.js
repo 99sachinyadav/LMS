@@ -2,6 +2,7 @@ import {clerkClient} from '@clerk/express'
 import Course from '../model/course.js';
 import {v2 as cloudinary} from 'cloudinary';
 import { Purchase } from '../model/purchase.js';
+import User from '../model/User.js';
  
 // update role to educator 
 export const updateRoleToEducator = async (req,res)=>{
@@ -80,7 +81,7 @@ export const educatordashboarddata = async(req,res)=>{
          for(const course of courses){
             const students = await User.find({
                 _id:{$in:course.enrolledStudents}
-            },'name','imageUrl')
+            },'name imageUrl')
 
             students.forEach(student =>{
                 enrolledStudentsData.push({
@@ -94,7 +95,7 @@ export const educatordashboarddata = async(req,res)=>{
             totalearning,enrolledStudentsData,totalCourses
          }})
     } catch (error) {
-        res.json({success:false,messge:error.mesage})
+        res.json({success:false,messge:error.message})
     }
 }
 
@@ -107,11 +108,12 @@ export const getEnrolledStudentsData = async (req,res)=>{
            const educator= req.auth.userId;
             const courses = await Course.find({educator})
               const courseIds= courses.map((course)=>course._id);
+            //   console.log(courses)
 
               const purchases = await Purchase.find({
                   courseId:{$in:courseIds},
                   status:'completed'
-              }).populate('userId','name','imageUrl').populate('courseId','courseTitle')
+              }).populate('userId','name imageUrl').populate('courseId','courseTitle')
 
 
             const enrolledStudents = purchases.map(purchase=>({
@@ -119,10 +121,11 @@ export const getEnrolledStudentsData = async (req,res)=>{
                 courseTitle:purchase.courseId.courseTitle,
                 purchaseData:purchase.createdAt
             }));
+            console.log(enrolledStudents)
             res.json({success:true,enrolledStudents})
         
     } catch (error) {
-         res.json({success:false,messge:error.mesage})
+         res.json({success:false,messge:error.message})
     }
 
 }

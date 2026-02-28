@@ -63,14 +63,17 @@ export const stripeWebhooks = async(req,res)=>{
    const sig = req.headers['stripe-signature'];
 
   let event;
-
+  console.log("Hello")
   try {
     event = Stripe.webhooks.constructEvent(
       req.body,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
+     
     );
         // ✅ Handle events (THIS is your converted code)
+             
+        console.log(event.type)
     switch (event.type) {
 
       case "payment_intent.succeeded":{
@@ -86,9 +89,11 @@ export const stripeWebhooks = async(req,res)=>{
           const purchaseData = await Purchase.findById(purchaseId)
           const userData = await User.findById(purchaseData.userId)
 
-        const  courseData = await Course.findById(purchaseData.courseId.toString())
 
-         courseData.enrolledStudents.push(userData)
+        const  courseData = await Course.findById(purchaseData.courseId.toString())
+        console.log(courseData,userData)
+
+         courseData.enrolledStudents.push(userData._id)
          await courseData.save()
 
          userData.enrolledCourses.push(courseData._id)

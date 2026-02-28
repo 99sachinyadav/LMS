@@ -7,6 +7,7 @@ import { Purchase } from "../model/purchase.js"
  export const getAllCourses = async(req,res)=>{
     try {
         const courses = await  Course.find({isPublished:true}).select(['-courseContent','-enrolledStudents']).populate({path:'educator'})
+        // console.log(courses)
          res.json({success:true,courses})
     } catch (error) {
         res.json({success:false,message:error.message})

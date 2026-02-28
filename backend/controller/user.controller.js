@@ -25,6 +25,7 @@ export  const getUserdata = async(req,res)=>{
   const userId = req.auth.userId
 
         const userdata = await User.findById(userId).populate('enrolledCourses')
+        console.log(userdata.  enrolledCourses.length)
 
         res.json({success:true ,enrolledCourses:userdata})
         
@@ -85,6 +86,7 @@ export const purchaseCourse = async(req,res)=>{
                     purchaseId:newPurchase._id.toString(),
                 }
             })
+            // console.log(session.url)
             res.json({success:true,session_url:session.url})
        } catch (error) {
            res.json({success:false,message:error.message    })
@@ -129,8 +131,11 @@ export const getCourseProgress = async(req,res)=>{
 
     try {
         const userId = req.auth.userId
-        const {courseId} = req.params
+        const {courseId} = req.query
+        // console.log(courseId,userId)
         const progressData = await CourseProgress.findOne({userId,courseId})
+        //  console.log(progressData)
+        
         if(!progressData){
             return res.json({success:false,message:'No Progress Found'})
         }
@@ -146,6 +151,7 @@ export const addUserRating = async(req,res)=>{
     try {
         const userId = req.auth.userId
         const {courseId,rating}=req.body;
+        // console.log(courseId,rating)
         if(!courseId || !userId||!rating || rating<1|| rating>5){
             return res.json({success:false,message:"Invalid Details"})
         }
@@ -170,7 +176,8 @@ export const addUserRating = async(req,res)=>{
         }
 
         await course.save();
-        return res.json({success:false,message:"Rating Added"})
+          
+        return res.json({success:true,message:"Rating Added"})
        
     } catch (error) {
         res.json({success:false,message:error.message})
