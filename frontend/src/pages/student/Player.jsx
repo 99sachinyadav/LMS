@@ -125,8 +125,7 @@ const Player = () => {
   };
 }, [playerData?.lectureNotesUrl]);
 
-const notesUrl = encodeURIComponent(playerData.lectureNotesUrl);
-const iframeSrc = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${notesUrl}`;
+ 
 
 
 const handleDownloadNotes = async () => {
@@ -301,7 +300,7 @@ const handleDownloadNotes = async () => {
                       
                       
                       <iframe
-                        src={iframeSrc}
+                        src={`https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(playerData.lectureNotesUrl)}`}
                         title="Lecture Notes"
                         className="w-full h-full"
                       />
