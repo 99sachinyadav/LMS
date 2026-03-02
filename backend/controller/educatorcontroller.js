@@ -35,6 +35,13 @@ export const addCourse = async(req,res)=>{
 
         const parsedCouseData = await JSON.parse(courseData)
         parsedCouseData.educator= educatorId
+        // Ensure programming fields have safe defaults if not provided
+        if (typeof parsedCouseData.isProgrammingCourse === "undefined") {
+            parsedCouseData.isProgrammingCourse = false;
+        }
+        if (!Array.isArray(parsedCouseData.programmingQuestions)) {
+            parsedCouseData.programmingQuestions = [];
+        }
         const newCourse = await Course.create(parsedCouseData)
         const imageUpload = await cloudinary.uploader.upload(imageFile.path)
         newCourse.courseThumbnail = imageUpload.secure_url
@@ -74,6 +81,32 @@ export const getEducatorCourseById = async (req, res) => {
             return res.json({ success: false, message: 'Course not found' });
         }
         res.json({ success: true, course });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+// Update course thumbnail (works even if published)
+export const updateCourseThumbnail = async (req, res) => {
+    try {
+        const educator = req.auth.userId;
+        const { courseId } = req.params;
+        const imageFile = req.file;
+
+        if (!imageFile) {
+            return res.json({ success: false, message: 'Thumbnail image not attached' });
+        }
+
+        const course = await Course.findOne({ _id: courseId, educator });
+        if (!course) return res.json({ success: false, message: 'Course not found' });
+
+        const imageUpload = await cloudinary.uploader.upload(imageFile.path, {
+            folder: 'lms-course-thumbnails',
+        });
+        course.courseThumbnail = imageUpload.secure_url;
+        await course.save();
+
+        res.json({ success: true, message: 'Thumbnail updated', course });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }
@@ -202,6 +235,97 @@ export const updateLectureInCourse = async (req, res) => {
 
         await course.save();
         res.json({ success: true, message: 'Lecture updated', course });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+// Add a programming question to a course (works even if published)
+export const addProgrammingQuestionToCourse = async (req, res) => {
+    try {
+        const educator = req.auth.userId;
+        const { courseId } = req.params;
+        const {
+            title,
+            description,
+            starterCode,
+            language = 'javascript',
+            testCases,
+        } = req.body;
+
+        if (!title || !String(title).trim()) {
+            return res.json({ success: false, message: 'Question title is required' });
+        }
+        if (!description || !String(description).trim()) {
+            return res.json({ success: false, message: 'Description is required' });
+        }
+
+        if (!Array.isArray(testCases) || testCases.length < 4) {
+            return res.json({
+                success: false,
+                message: 'At least 4 test cases are required',
+            });
+        }
+
+        const normalisedTestCases = testCases.map((tc) => ({
+            input: String(tc.input ?? ''),
+            expectedOutput: String(tc.expectedOutput ?? ''),
+        }));
+
+        const course = await Course.findOne({ _id: courseId, educator });
+        if (!course) return res.json({ success: false, message: 'Course not found' });
+
+        const questionId = crypto.randomUUID();
+
+        course.isProgrammingCourse = true;
+        course.programmingQuestions = course.programmingQuestions || [];
+        course.programmingQuestions.push({
+            questionId,
+            title: String(title).trim(),
+            description: String(description).trim(),
+            starterCode: starterCode || '',
+            language,
+            testCases: normalisedTestCases,
+        });
+
+        await course.save();
+
+        res.json({
+            success: true,
+            message: 'Programming question added',
+            course,
+            questionId,
+        });
+    } catch (error) {
+        res.json({ success: false, message: error.message });
+    }
+};
+
+// Remove a programming question from a course (works even if published)
+export const removeProgrammingQuestionFromCourse = async (req, res) => {
+    try {
+        const educator = req.auth.userId;
+        const { courseId, questionId } = req.params;
+
+        const course = await Course.findOne({ _id: courseId, educator });
+        if (!course) return res.json({ success: false, message: 'Course not found' });
+
+        const before = course.programmingQuestions?.length || 0;
+        course.programmingQuestions = (course.programmingQuestions || []).filter(
+            (q) => q.questionId !== questionId,
+        );
+        const after = course.programmingQuestions.length;
+
+        if (before === after) {
+            return res.json({ success: false, message: 'Question not found' });
+        }
+
+        if (course.programmingQuestions.length === 0) {
+            course.isProgrammingCourse = false;
+        }
+
+        await course.save();
+        res.json({ success: true, message: 'Question removed', course });
     } catch (error) {
         res.json({ success: false, message: error.message });
     }

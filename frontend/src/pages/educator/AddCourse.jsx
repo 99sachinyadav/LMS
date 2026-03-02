@@ -27,6 +27,21 @@ const AddCourse = () => {
     lectureNotesUrl: "",
   });
   const [notesUploading, setNotesUploading] = useState(false);
+  const [isProgrammingCourse, setIsProgrammingCourse] = useState(false);
+  const [programmingQuestions, setProgrammingQuestions] = useState([]);
+  const [showQuestionPopup, setShowQuestionPopup] = useState(false);
+  const [questionForm, setQuestionForm] = useState({
+    title: "",
+    description: "",
+    starterCode: "",
+    language: "javascript",
+    testCases: [
+      { input: "", expectedOutput: "" },
+      { input: "", expectedOutput: "" },
+      { input: "", expectedOutput: "" },
+      { input: "", expectedOutput: "" },
+    ],
+  });
 
   const handleChapter = (action, chapterId) => {
     if (action == "add") {
@@ -140,6 +155,59 @@ const AddCourse = () => {
     }
   };
 
+  const handleTestCaseChange = (index, field, value) => {
+    setQuestionForm((prev) => {
+      const next = { ...prev };
+      const cases = [...next.testCases];
+      cases[index] = { ...cases[index], [field]: value };
+      next.testCases = cases;
+      return next;
+    });
+  };
+
+  const addTestCaseRow = () => {
+    setQuestionForm((prev) => ({
+      ...prev,
+      testCases: [...prev.testCases, { input: "", expectedOutput: "" }],
+    }));
+  };
+
+  const saveProgrammingQuestion = () => {
+    const { title, description, testCases } = questionForm;
+    if (!title.trim() || !description.trim()) {
+      toast.error("Enter question title and description");
+      return;
+    }
+    const filledCases = testCases.filter(
+      (tc) => tc.input.trim() && tc.expectedOutput.trim(),
+    );
+    if (filledCases.length < 4) {
+      toast.error("Please provide at least 4 complete test cases");
+      return;
+    }
+    setProgrammingQuestions((prev) => [
+      ...prev,
+      {
+        ...questionForm,
+        testCases: filledCases,
+      },
+    ]);
+    setIsProgrammingCourse(true);
+    setShowQuestionPopup(false);
+    setQuestionForm({
+      title: "",
+      description: "",
+      starterCode: "",
+      language: "javascript",
+      testCases: [
+        { input: "", expectedOutput: "" },
+        { input: "", expectedOutput: "" },
+        { input: "", expectedOutput: "" },
+        { input: "", expectedOutput: "" },
+      ],
+    });
+  };
+
   const handleSubmit = async (e) => {
 try {
       e.preventDefault();
@@ -154,6 +222,8 @@ try {
         discount:Number(discount),
         courseContent:chapters,
         isPublished:true,
+        isProgrammingCourse,
+        programmingQuestions,
       }
 
 
@@ -265,6 +335,45 @@ try {
             required
           />
         </div>
+
+        <div className="flex items-center gap-3">
+          <input
+            id="programmingCourse"
+            type="checkbox"
+            className="scale-110"
+            checked={isProgrammingCourse}
+            onChange={(e) => setIsProgrammingCourse(e.target.checked)}
+          />
+          <label htmlFor="programmingCourse" className="text-sm">
+            This is a programming course (add coding questions)
+          </label>
+        </div>
+
+        {isProgrammingCourse && (
+          <div className="mt-2 border rounded-lg p-3 bg-gray-50">
+            <div className="flex items-center justify-between mb-2">
+              <p className="font-semibold text-gray-800 text-sm">
+                Programming Questions ({programmingQuestions.length})
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowQuestionPopup(true)}
+                className="text-xs px-3 py-1.5 rounded bg-indigo-600 text-white"
+              >
+                + Add Question
+              </button>
+            </div>
+            {programmingQuestions.length > 0 && (
+              <ul className="text-xs text-gray-700 list-disc pl-4 space-y-1">
+                {programmingQuestions.map((q, idx) => (
+                  <li key={idx}>
+                    {idx + 1}. {q.title}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
 
         {/* Adding Chapter & Lectures */}
 
@@ -390,6 +499,151 @@ try {
                   setShowChapterPopup(false);
                   setChapterTitleInput("");
                 }}
+                className="absolute top-4 right-4 w-4 cursor-pointer"
+                alt=""
+              />
+            </div>
+          </div>
+        )}
+
+        {showQuestionPopup && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white border border-black text-gray-700 p-4 rounded relative w-full max-w-xl max-h-[90vh] overflow-y-auto">
+              <h2 className="text-lg font-semibold mb-1">Add Programming Question</h2>
+              <p className="text-xs text-gray-500 mb-3">
+                Students will solve these in the course player. Provide at least 4 test
+                cases with sample input and expected output.
+              </p>
+
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm">Title</p>
+                  <input
+                    type="text"
+                    className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm"
+                    value={questionForm.title}
+                    onChange={(e) =>
+                      setQuestionForm((p) => ({ ...p, title: e.target.value }))
+                    }
+                    placeholder="Two Sum, Reverse String, etc."
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <p className="text-sm">Description</p>
+                    <textarea
+                      className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm min-h-[80px]"
+                      value={questionForm.description}
+                      onChange={(e) =>
+                        setQuestionForm((p) => ({ ...p, description: e.target.value }))
+                      }
+                      placeholder="Explain the problem, constraints, and what the function should return."
+                    />
+                  </div>
+                  <div>
+                    <p className="text-sm">Language</p>
+                    <select
+                      className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm bg-white"
+                      value={questionForm.language}
+                      onChange={(e) =>
+                        setQuestionForm((p) => ({ ...p, language: e.target.value }))
+                      }
+                    >
+                      <option value="javascript">JavaScript</option>
+                      <option value="cpp">C++</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm">
+                    Starter Code (optional,{" "}
+                    {questionForm.language === "cpp" ? "C++" : "JavaScript"})
+                  </p>
+                  <textarea
+                    className="mt-1 block w-full border rounded py-2 px-3 outline-none text-xs font-mono min-h-[80px]"
+                    value={questionForm.starterCode}
+                    onChange={(e) =>
+                      setQuestionForm((p) => ({ ...p, starterCode: e.target.value }))
+                    }
+                    placeholder={
+                      questionForm.language === "cpp"
+                        ? `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  string input;\n  if (!getline(cin, input)) return 0;\n  // write your code using input\n  cout << input;\n  return 0;\n}`
+                        : `async function solve(input) {\n  // write your code\n  return '';\n}`
+                    }
+                  />
+                </div>
+
+                <div>
+                  <p className="text-sm mb-1">Test Cases (min 4)</p>
+                  <div className="space-y-2">
+                    {questionForm.testCases.map((tc, idx) => (
+                      <div
+                        key={idx}
+                        className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
+                      >
+                        <div>
+                          <p className="mb-0.5 text-[11px] text-gray-600">
+                            Input #{idx + 1}
+                          </p>
+                          <input
+                            type="text"
+                            className="block w-full border rounded py-1.5 px-2 outline-none"
+                            value={tc.input}
+                            onChange={(e) =>
+                              handleTestCaseChange(idx, "input", e.target.value)
+                            }
+                            placeholder='e.g. "2 3" or "5"'
+                          />
+                        </div>
+                        <div>
+                          <p className="mb-0.5 text-[11px] text-gray-600">
+                            Expected Output #{idx + 1}
+                          </p>
+                          <input
+                            type="text"
+                            className="block w-full border rounded py-1.5 px-2 outline-none"
+                            value={tc.expectedOutput}
+                            onChange={(e) =>
+                              handleTestCaseChange(idx, "expectedOutput", e.target.value)
+                            }
+                            placeholder='e.g. "5"'
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={addTestCaseRow}
+                    className="mt-2 text-[11px] text-indigo-700 underline"
+                  >
+                    + Add another test case
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowQuestionPopup(false)}
+                  className="px-4 py-2 rounded border text-sm"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={saveProgrammingQuestion}
+                  className="px-4 py-2 rounded bg-blue-500 text-white text-sm"
+                >
+                  Save Question
+                </button>
+              </div>
+
+              <img
+                src={assets.cross_icon}
+                onClick={() => setShowQuestionPopup(false)}
                 className="absolute top-4 right-4 w-4 cursor-pointer"
                 alt=""
               />

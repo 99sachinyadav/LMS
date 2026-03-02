@@ -11,6 +11,35 @@ const lectureSchema = new mongoose.Schema({
     lectureNotesUrl:{type:String,default:null}
 },{_id:false})
 
+const testCaseSchema = new mongoose.Schema(
+  {
+    input: { type: String, required: true },
+    expectedOutput: { type: String, required: true },
+  },
+  { _id: false },
+);
+
+const programmingQuestionSchema = new mongoose.Schema(
+  {
+    questionId: { type: String, required: true },
+    title: { type: String, required: true },
+    description: { type: String, required: true },
+    starterCode: { type: String, default: "" },
+    language: { type: String, default: "javascript" },
+    testCases: {
+      type: [testCaseSchema],
+      validate: {
+        validator: function (arr) {
+          return Array.isArray(arr) && arr.length >= 4;
+        },
+        message: "At least 4 test cases are required",
+      },
+      default: [],
+    },
+  },
+  { _id: false },
+);
+
 const chapterSchema = new mongoose.Schema({
     chapterId:{type:String,required:true},
     chapterOrder:{type:Number,required:true},
@@ -26,6 +55,8 @@ const courseSchema = new mongoose.Schema({
     isPublished:{type:Boolean, required:true},
     discount:{type:Number, required:true,min:0,max:100},
      courseContent:[chapterSchema],
+     isProgrammingCourse:{type:Boolean,default:false},
+     programmingQuestions:[programmingQuestionSchema],
      courseRating:[
         {userId:{type:String},rating:{type:Number,min:1,max:5}}
      ],
