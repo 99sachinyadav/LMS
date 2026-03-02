@@ -15,6 +15,8 @@ const AddCourse = () => {
   const [discount, setdiscount] = useState(0);
   const [image, setimage] = useState(null);
   const [chapters, setchapters] = useState([]);
+  const [showChapterPopup, setShowChapterPopup] = useState(false);
+  const [chapterTitleInput, setChapterTitleInput] = useState("");
   const [showPopup, setshowPopup] = useState(false);
   const [currentChapterId, setcurrentChapterId] = useState(null);
   const [lectureDetails, setlectureDetails] = useState({
@@ -22,22 +24,13 @@ const AddCourse = () => {
     lectureDuration: "",
     lectureUrl: "",
     isPreviewFree: false,
+    lectureNotesUrl: "",
   });
+  const [notesUploading, setNotesUploading] = useState(false);
 
   const handleChapter = (action, chapterId) => {
     if (action == "add") {
-      const title = prompt("Enter Chapter Name");
-      if (title) {
-        const newChapter = {
-          chapterId: uniqid(),
-          chapterTitle: title,
-          chapterContent: [],
-          collapsed: false,
-          chapterOrder:
-            chapters.length > 0 ? chapters.slice(-1)[0].chapterOrder + 1 : 1,
-        };
-        setchapters([...chapters, newChapter]);
-      }
+      setShowChapterPopup(true);
     } else if (action === "remove") {
       setchapters(chapters.filter((chapter) => chapter.chapterId != chapterId));
     } else if (action === "toggle") {
@@ -49,6 +42,26 @@ const AddCourse = () => {
         ),
       );
     }
+  };
+
+  const addChapter = () => {
+    const title = chapterTitleInput.trim();
+    if (!title) {
+      toast.error("Enter Chapter Name");
+      return;
+    }
+
+    const newChapter = {
+      chapterId: uniqid(),
+      chapterTitle: title,
+      chapterContent: [],
+      collapsed: false,
+      chapterOrder:
+        chapters.length > 0 ? chapters.slice(-1)[0].chapterOrder + 1 : 1,
+    };
+    setchapters([...chapters, newChapter]);
+    setChapterTitleInput("");
+    setShowChapterPopup(false);
   };
 
   const handleLecture = (action, chapterId, lectureIndex) => {
@@ -83,6 +96,7 @@ const AddCourse = () => {
                 ? chapter.chapterContent.slice(-1)[0].lectureOrder + 1
                 : 1,
             lectureId: uniqid(),
+            lectureNotesUrl: lectureDetails.lectureNotesUrl || undefined,
           };
           chapter.chapterContent.push(newLecture);
         }
@@ -95,7 +109,35 @@ const AddCourse = () => {
       lectureDuration: "",
       lectureUrl: "",
       isPreviewFree: false,
+      lectureNotesUrl: "",
     });
+  };
+
+  const handleNotesFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setNotesUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("notesFile", file);
+      const token = await getToken();
+      const { data } = await axios.post(
+        backendUrl + "/api/educator/upload-notes",
+        formData,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      if (data.success) {
+        setlectureDetails((prev) => ({ ...prev, lectureNotesUrl: data.url }));
+        toast.success("Notes uploaded");
+      } else {
+        toast.error(data.message || "Upload failed");
+      }
+    } catch (err) {
+      toast.error(err.message || "Failed to upload notes");
+    } finally {
+      setNotesUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -270,6 +312,19 @@ try {
                         >
                           Link
                         </a>{" "}
+                        {lecture.lectureNotesUrl && (
+                          <>
+                            -{" "}
+                            <a
+                              href={lecture.lectureNotesUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-green-600"
+                            >
+                              Notes
+                            </a>{" "}
+                          </>
+                        )}
                         - {lecture.isPreviewFree ? "Free Preview" : "Paid"}{" "}
                       </span>
                       <img
@@ -306,8 +361,44 @@ try {
           + Add Chapter
         </div>
 
+        {showChapterPopup && (
+          <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
+            <div className="bg-white border border-black text-gray-700 p-4 rounded relative w-full max-w-80">
+              <h2 className="text-lg font-semibold mb-4">Add Chapter</h2>
+              <div className="mb-3">
+                <p>Chapter Title</p>
+                <input
+                  type="text"
+                  className="mt-1 block w-full border rounded py-1 px-2"
+                  value={chapterTitleInput}
+                  onChange={(e) => setChapterTitleInput(e.target.value)}
+                  placeholder="Enter Chapter Name"
+                />
+              </div>
+
+              <button
+                onClick={addChapter}
+                type="button"
+                className="w-full bg-blue-400 text-white px-4 py-2 rounded"
+              >
+                Add
+              </button>
+
+              <img
+                src={assets.cross_icon}
+                onClick={() => {
+                  setShowChapterPopup(false);
+                  setChapterTitleInput("");
+                }}
+                className="absolute top-4 right-4 w-4 cursor-pointer"
+                alt=""
+              />
+            </div>
+          </div>
+        )}
+
         {showPopup && (
-          <div className="fixed insert-0 flex  sm:w-[80%] items-center   justify-center   bg-opacity-50">
+          <div className="fixed inset-0 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white border border-black text-gray-700 p-4 rounded relative w-full max-w-80">
               <h2 className="text-lg font-semibold mb-4">Add Lecture</h2>
               <div className="mb-2">
@@ -353,6 +444,21 @@ try {
                     })
                   }
                 />
+              </div>
+
+              <div className="mb-2">
+                <p>Lecture Notes (PDF)</p>
+                <input
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  className="mt-1 block w-full text-sm text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:bg-blue-50 file:text-blue-600"
+                  onChange={handleNotesFileChange}
+                  disabled={notesUploading}
+                />
+                {notesUploading && <span className="text-sm text-gray-500">Uploading…</span>}
+                {lectureDetails.lectureNotesUrl && (
+                  <span className="text-sm text-green-600 block mt-1">Notes attached</span>
+                )}
               </div>
 
               <div className="flex gap-2 my-4">

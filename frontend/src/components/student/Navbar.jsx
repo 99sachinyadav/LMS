@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { assets } from "../../assets/assets";
 import { Link } from "react-router-dom";
 import { useClerk, UserButton, useUser } from "@clerk/clerk-react";
@@ -11,12 +11,16 @@ import { toast } from "react-toastify";
 
 const Navbar = () => {
   const isCourseListPage = location.pathname.includes("/course-list");
- 
-
   const { openSignIn } = useClerk();
   const { user } = useUser();
   const {navigate , iseducator , backendUrl,setiseducator,getToken} = useContext(AppContext)
 
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    return localStorage.getItem("sdemy-theme") || "light";
+  });
+
+ 
 
     const becomeEducator = async ()=>{
          try {
@@ -48,15 +52,31 @@ const Navbar = () => {
     }
   return (
     <div
-      className={`flex items-center justify-between px-4 sm:px-10  md:px-14  lg:px-36 border-b border-gray-500 py-4 ${isCourseListPage ? "bg-white" : "bg-cyan-100/70"}`}
+      className={`flex items-center justify-between px-4 sm:px-10 md:px-14 lg:px-36 py-3 border-b border-slate-100 shadow-sm ${
+        isCourseListPage ? "bg-white/90 dark:bg-slate-900/95" : "bg-white/80 dark:bg-slate-900/95 backdrop-blur-md"
+      }`}
     >
-      <img
-       onClick={()=>navigate('/')}
-        src={assets.logo}
-        alt="Logo"
-        className="w-28 lg:w-32  cursor-pointer"
-      />
-      <div className="hidden md:flex items-center gap-5 text-gray-500">
+      <button
+        type="button"
+        onClick={() => navigate("/")}
+        className="flex items-center gap-3 group"
+      >
+        <div className="flex items-center justify-center w-9 h-9 rounded-2xl bg-gradient-to-br from-indigo-500 via-sky-500 to-cyan-400 text-white font-extrabold text-lg shadow-md group-hover:scale-105 transition-transform">
+          S
+        </div>
+        <div className="flex flex-col items-start leading-tight">
+          <span className="text-xl font-bold tracking-tight text-slate-900">
+            Sdemy
+          </span>
+          <span className="text-[11px] uppercase tracking-[0.2em] text-sky-500 hidden sm:block">
+            Learn · Build · Grow
+          </span>
+        </div>
+      </button>
+      <div className="hidden md:flex items-center gap-5 text-gray-500 dark:text-slate-200">
+        <div className="flex items-center gap-4">
+         
+        </div>
         <div className="flex items-center gap-5">
           {user && (
             <>
@@ -77,7 +97,7 @@ const Navbar = () => {
         )}
       </div>
       {/* for phone screen */}
-      <div className="md:hidden flex items-center gap-2  sm:gap-5  text-gray-500">
+      <div className="md:hidden flex items-center gap-2  sm:gap-5  text-gray-500 dark:text-slate-200">
         <div  className="flex items-center gap-1 sm:gap-2 max:sm:text-xs">
            {user && (
             <>

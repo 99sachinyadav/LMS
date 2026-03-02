@@ -3,6 +3,7 @@ import { AppContext } from '../../context/AppContext'
 import Loading from '../../components/student/Loading';
 import axios from 'axios';
 import { toast } from 'react-toastify';
+import { Link } from 'react-router-dom';
 
 const MyCourses = () => {
   const {currency ,backendUrl,  iseducator,getToken} = useContext(AppContext)
@@ -40,6 +41,7 @@ const MyCourses = () => {
                       <th className='px-4 py-3 font-semibold truncate'>Earnings</th>
                       <th className='px-4 py-3 font-semibold truncate'>Students</th>
                       <th className='px-4 py-3 font-semibold truncate'>Published On</th>
+                      <th className='px-4 py-3 font-semibold truncate'>Actions</th>
                     </tr>
 
                   </thead>
@@ -58,6 +60,14 @@ const MyCourses = () => {
                           <td className='px-4 py-3'>{course.enrolledStudents.length}</td>
                           <td   className='px-4 py-3'>
                             {new Date(course.createdAt).toLocaleDateString()}
+                          </td>
+                          <td className='px-4 py-3'>
+                            <Link
+                              to={`/educator/course/${course._id}/content`}
+                              className='inline-flex items-center justify-center px-3 py-1.5 rounded border bg-indigo-50 text-indigo-700 border-indigo-100 hover:bg-indigo-100'
+                            >
+                              Manage Content
+                            </Link>
                           </td>
                         </tr>
                     ))}
