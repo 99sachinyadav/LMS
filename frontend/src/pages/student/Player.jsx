@@ -125,6 +125,9 @@ const Player = () => {
   };
 }, [playerData?.lectureNotesUrl]);
 
+const notesUrl = encodeURIComponent(playerData.lectureNotesUrl);
+const iframeSrc = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${notesUrl}`;
+
 
 const handleDownloadNotes = async () => {
   const res = await fetch(playerData.lectureNotesUrl);
@@ -296,9 +299,9 @@ const handleDownloadNotes = async () => {
                   {showNotes && (
                     <div className="mt-3 border border-slate-200 w-full rounded-lg overflow-hidden bg-white h-72 md:h-80">
                       
-                     {console.log(`${playerData.lectureNotesUrl}.pdf`)}
+                      
                       <iframe
-                        src={pdfBlobUrl}
+                        src={iframeSrc}
                         title="Lecture Notes"
                         className="w-full h-full"
                       />
