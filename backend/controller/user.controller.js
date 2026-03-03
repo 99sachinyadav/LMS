@@ -3,6 +3,8 @@ import { CourseProgress } from "../model/courseprogress.js"
 import { Purchase } from "../model/purchase.js"
 import User from "../model/User.js"
 import Stripe from 'stripe'
+import { GoogleGenerativeAI } from "@google/generative-ai"
+import { v2 as cloudinary } from "cloudinary"
 
 export  const getUserdata = async(req,res)=>{
     try {
@@ -183,6 +185,87 @@ export const addUserRating = async(req,res)=>{
         res.json({success:false,message:error.message})
     }
 }
+
+let genAIClient = null;
+const getGenAIClient = () => {
+  if (genAIClient) return genAIClient;
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+  genAIClient = new GoogleGenerativeAI(apiKey);
+  return genAIClient;
+};
+
+// AI chat for debugging and study help
+export const aiChat = async (req, res) => {
+    try {
+        const userId = req.auth.userId;
+        if (!userId) {
+            return res.json({ success: false, message: "Unauthorized" });
+        }
+
+        const client = getGenAIClient();
+        if (!client) {
+            return res.json({
+                success: false,
+                message:
+                    "GEMINI_API_KEY is not set in the backend environment. Please add it to your .env and restart the server.",
+            });
+        }
+
+        const { message, code, language, courseId } = req.body || {};
+        if (!message || !String(message).trim()) {
+            return res.json({ success: false, message: "Message is required" });
+        }
+
+        let attachmentInfo = "";
+        if (req.file) {
+            const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+                resource_type: "auto",
+                folder: "lms-ai-attachments",
+            });
+            attachmentInfo = `\nThe user also attached a file for reference: ${uploadResult.secure_url}\n`;
+        }
+
+        const systemPrompt = `
+You are an AI tutor inside a   platform (LMS).
+Your purpose:
+- you have to also give the answer related to anything related to study in any field 
+-if anyone give you a pdf then give the answer according to the question of student based on pdf or ducument uploaded
+- Help students debug code in a supportive way.
+- Explain programming concepts related to the course.
+- Give step-by-step hints instead of just full solutions when possible.
+- if a student still ask for solution then give a code solution
+-give the solution in the student  desired programing language
+-and talk to student in the language in which student is talking to you
+- Stay on study/programming topics only; give the crisp and consise but full answer politely decline unrelated questions.`;
+
+        const model = client.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+        const contents = [
+            {
+                role: "user",
+                parts: [
+                    { text: systemPrompt },
+                    {
+                        text:
+                            `User message:\n${String(message).trim()}\n\n` +
+                            (language ? `Language: ${language}\n` : "") +
+                            (code ? `Code:\n${code}\n\n` : "") +
+                            (courseId ? `CourseId: ${courseId}\n` : "") +
+                            attachmentInfo,
+                    },
+                ],
+            },
+        ];
+
+        const result = await model.generateContent({ contents });
+        const replyText = result?.response?.text?.() || "I couldn't generate a response.";
+
+        return res.json({ success: true, reply: replyText });
+    } catch (error) {
+        return res.json({ success: false, message: error.message });
+    }
+};
 
 // Run code for a programming question against its test cases (simple JS runner)
 export const runProgrammingQuestion = async (req, res) => {

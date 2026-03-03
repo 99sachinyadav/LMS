@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { AppContext } from "../../context/AppContext";
 import { useParams } from "react-router-dom";
 import { assets } from "../../assets/assets";
@@ -9,6 +9,7 @@ import Rating from "../../components/student/Rating";
 import axios from "axios";
 import { toast } from "react-toastify";
 import Loading from "../../components/student/Loading";
+ 
 
 const Player = () => {
   const { enrolledCourses, calculateChapterTime ,backendUrl ,getToken,userData,
@@ -22,10 +23,18 @@ const Player = () => {
   const [initialRating, setinitialRating] = useState(0)
   const [showNotes, setShowNotes] = useState(true);
   const [selectedQuestionId, setSelectedQuestionId] = useState(null);
+  const [showAiAssistant, setShowAiAssistant] = useState(false);
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiFile, setAiFile] = useState(null);
+  const [aiDisplayAnswer, setAiDisplayAnswer] = useState("");
+  const aiAnswerBoxRef = useRef(null);
   const [languageByQuestion, setLanguageByQuestion] = useState({});
   const [codeByQuestion, setCodeByQuestion] = useState({});
   const [runResultsByQuestion, setRunResultsByQuestion] = useState({});
   const [runningQuestionId, setRunningQuestionId] = useState(null);
+  const [isEditorDark, setIsEditorDark] = useState(false);
 
   const DEFAULT_JS = `async function solve(input) {\n  // write your code here\n  return '';\n}\n`;
   const DEFAULT_CPP = `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  string input;\n  if (!getline(cin, input)) return 0;\n  // write your code using input\n  cout << input;\n  return 0;\n}\n`;
@@ -43,17 +52,20 @@ const Player = () => {
     setLanguageByQuestion((prev) => ({ ...prev, [questionId]: lang }));
   };
   const getCourseData = () => {
-    enrolledCourses.map((course) => {
-      if (course._id === courseId) {
-        setcourseData(course);
-        course.courseRating.map((item)=>{
-          if(item.userId === userData._id){
-            setinitialRating(item.rating)
-          }
-             
-        })
-      }
-    });
+    const matchedCourse = enrolledCourses.find((course) => course._id === courseId);
+    if (!matchedCourse) return;
+
+    setcourseData(matchedCourse);
+
+    if (!userData?._id) {
+      setinitialRating(0);
+      return;
+    }
+
+    const existingRating = matchedCourse.courseRating?.find(
+      (item) => item.userId === userData._id,
+    );
+    setinitialRating(existingRating?.rating || 0);
   };
 
   const getSelectedQuestion = () => {
@@ -74,6 +86,38 @@ const Player = () => {
       ...prev,
       [getCodeKey(questionId, lang)]: value,
     }));
+  };
+
+  const handleCodeKeyDown = (questionId, lang, currentValue, e) => {
+    const pairs = {
+      "{": "}",
+      "(": ")",
+      "[": "]",
+      '"': '"',
+      "'": "'",
+      "`": "`",
+    };
+
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!pairs[e.key]) return;
+
+    const input = e.target;
+    const start = input.selectionStart ?? 0;
+    const end = input.selectionEnd ?? 0;
+    const left = currentValue.slice(0, start);
+    const selected = currentValue.slice(start, end);
+    const right = currentValue.slice(end);
+    const close = pairs[e.key];
+
+    e.preventDefault();
+
+    const nextValue = `${left}${e.key}${selected}${close}${right}`;
+    handleCodeChange(questionId, lang, nextValue);
+
+    requestAnimationFrame(() => {
+      const cursorPos = selected ? end + 2 : start + 1;
+      input.setSelectionRange(cursorPos, cursorPos);
+    });
   };
 
   const handleRunCode = async () => {
@@ -131,7 +175,7 @@ const Player = () => {
       getCourseData();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [enrolledCourses]);
+  }, [enrolledCourses, userData, courseId]);
 
   const markLectureAsCompleted = async (lectureId)=>{
         try {
@@ -228,6 +272,29 @@ const handleDownloadNotes = async () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+    if (!aiAnswer) {
+      setAiDisplayAnswer("");
+      return;
+    }
+    let index = 0;
+    setAiDisplayAnswer("");
+    const interval = setInterval(() => {
+      index += 1;
+      setAiDisplayAnswer(aiAnswer.slice(0, index));
+      if (index >= aiAnswer.length) {
+        clearInterval(interval);
+      }
+    }, 15);
+    return () => clearInterval(interval);
+  }, [aiAnswer]);
+
+  useEffect(() => {
+    if (aiAnswerBoxRef.current) {
+      aiAnswerBoxRef.current.scrollTop = aiAnswerBoxRef.current.scrollHeight;
+    }
+  }, [aiDisplayAnswer]);
+
   const selectedQuestion = courseData?.isProgrammingCourse
     ? getSelectedQuestion()
     : null;
@@ -239,7 +306,7 @@ const handleDownloadNotes = async () => {
 
   return courseData? (
     <>
-      <div className="p-4 sm:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36   bg-gradient-to-b from-cyan-100/60">
+      <div className="p-4 sm:p-10 flex flex-col-reverse md:grid md:grid-cols-2 gap-10 md:px-36 bg-gradient-to-b from-sky-50 via-white to-sky-50 ">
         {/* left column */}
         <div className="text-gray-800 space-y-6">
           <div>
@@ -375,39 +442,60 @@ const handleDownloadNotes = async () => {
                         <p className="text-xs font-semibold text-slate-700">
                           Compiler
                         </p>
-                        <div className="flex rounded overflow-hidden border border-slate-200">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => handleLanguageSwitch(qid, "javascript")}
-                            className={`px-3 py-1.5 text-xs font-medium ${
-                              lang === "javascript"
-                                ? "bg-blue-600 text-white"
-                                : "bg-white text-slate-600 hover:bg-slate-50"
-                            }`}
+                            onClick={() => setIsEditorDark((prev) => !prev)}
+                            className="px-3 py-1.5 text-xs rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                           >
-                            JavaScript
+                            {isEditorDark ? "Light Editor" : "Dark Editor"}
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => handleLanguageSwitch(qid, "cpp")}
-                            className={`px-3 py-1.5 text-xs font-medium ${
-                              lang === "cpp"
-                                ? "bg-blue-600 text-white"
-                                : "bg-white text-slate-600 hover:bg-slate-50"
-                            }`}
-                          >
-                            C++
-                          </button>
+                          <div className="flex rounded overflow-hidden border border-slate-200">
+                            <button
+                              type="button"
+                              onClick={() => handleLanguageSwitch(qid, "javascript")}
+                              className={`px-3 py-1.5 text-xs font-medium ${
+                                lang === "javascript"
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              JavaScript
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleLanguageSwitch(qid, "cpp")}
+                              className={`px-3 py-1.5 text-xs font-medium ${
+                                lang === "cpp"
+                                  ? "bg-blue-600 text-white"
+                                  : "bg-white text-slate-600 hover:bg-slate-50"
+                              }`}
+                            >
+                              C++
+                            </button>
+                          </div>
                         </div>
                       </div>
                       <textarea
                         spellCheck={false}
                         autoCorrect="off"
                         autoCapitalize="off"
-                        className="w-full border border-slate-300 rounded-md text-xs font-mono p-2 min-h-[180px] outline-none focus:outline-none focus:ring-0"
+                        className={`w-full border rounded-md text-sm font-mono p-3 min-h-[180px] outline-none focus:outline-none focus:ring-0 ${
+                          isEditorDark
+                            ? "bg-slate-900 text-white border-slate-700 placeholder:text-slate-400"
+                            : "bg-white text-slate-800 border-slate-300"
+                        }`}
                         value={codeByQuestion[codeKey] ?? starter}
                         onChange={(e) =>
                           handleCodeChange(qid, lang, e.target.value)
+                        }
+                        onKeyDown={(e) =>
+                          handleCodeKeyDown(
+                            qid,
+                            lang,
+                            codeByQuestion[codeKey] ?? starter,
+                            e,
+                          )
                         }
                       />
                     </div>
@@ -507,7 +595,7 @@ const handleDownloadNotes = async () => {
         {/* right column */}
         <div className="md:mt-10 space-y-6">
           <div>
-            {playerData ? (
+                {playerData ? (
               <div>
                 <YouTube
                   videoId={playerData.lectureUrl.split("/").pop()}
@@ -523,7 +611,111 @@ const handleDownloadNotes = async () => {
                     {progressData&& progressData.lectureCompleted.includes(playerData.lectureId)? "Completed" : "Mark Complete"}
                   </button>
                 </div>
-                {playerData.lectureNotesUrl && (
+              </div>
+            ) : (
+              <img src={courseData ? courseData.courseThumbnail : ""} alt="" />
+            )}
+          </div>
+
+          {showAiAssistant && (
+                  <div className="mt-4 border border-slate-200 rounded-xl bg-white p-3 text-xs max-h-96 md:max-h-[28rem] overflow-hidden flex flex-col">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="font-semibold text-slate-800 text-sm">AI Helper</p>
+                      <span className="text-[10px] text-slate-500">
+                        Debug code & ask study questions
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mb-2">
+                      Ask course-related programming questions or paste code you want to debug.
+                      Files (image/PDF) will be sent along with your question.
+                    </p>
+                    <textarea
+                      value={aiQuestion}
+                      onChange={(e) => setAiQuestion(e.target.value)}
+                      spellCheck={false}
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      className="w-full border border-slate-300 rounded-md text-sm p-2 min-h-[140px] outline-none focus:outline-none focus:ring-0"
+                      placeholder="Describe your bug or ask a question about this lecture or your code..."
+                    />
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <label className="text-[11px] text-slate-600 cursor-pointer">
+                        <span className="px-2 py-1 rounded border border-slate-200 bg-slate-50 mr-1">
+                          Attach image/PDF
+                        </span>
+                        <input
+                          type="file"
+                          accept="image/*,application/pdf"
+                          className="hidden"
+                          onChange={(e) => setAiFile(e.target.files?.[0] || null)}
+                        />
+                      </label>
+                      {aiFile && (
+                        <span className="text-[10px] text-slate-500 truncate max-w-[120px]">
+                          {aiFile.name}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!aiQuestion.trim()) return;
+                          try {
+                            setAiLoading(true);
+                            setAiAnswer("");
+                            const token = await getToken();
+                            const formData = new FormData();
+                            formData.append("message", aiQuestion);
+                            if (selectedQuestion) {
+                              const lang = getSelectedLanguage(selectedQuestion);
+                              const codeKey = getCodeKey(selectedQuestion.questionId, lang);
+                              const code = codeByQuestion[codeKey] || "";
+                              formData.append("language", lang);
+                              formData.append("code", code);
+                            }
+                            formData.append("courseId", courseId);
+                            if (aiFile) {
+                              formData.append("attachment", aiFile);
+                            }
+                            const { data } = await axios.post(
+                              `${backendUrl}/api/user/ai/chat`,
+                              formData,
+                              {
+                                headers: {
+                                  Authorization: `Bearer ${token}`,
+                                },
+                              },
+                            );
+                            if (!data.success) {
+                              toast.error(data.message || "AI assistant error");
+                            }
+                            setAiAnswer(data.reply || "");
+                            if (data.success && data.reply) {
+                              setAiQuestion("");
+                            }
+                          } catch (error) {
+                            toast.error(error.message || "Failed to contact AI assistant");
+                          } finally {
+                            setAiLoading(false);
+                          }
+                        }}
+                        disabled={!aiQuestion.trim() || aiLoading}
+                        className="px-4 py-1.5 rounded bg-blue-600 text-white text-xs disabled:opacity-60"
+                      >
+                        {aiLoading ? "Asking..." : "Ask AI"}
+                      </button>
+                    </div>
+                    {aiDisplayAnswer && (
+                      <div
+                        ref={aiAnswerBoxRef}
+                        className="mt-3 border border-slate-200 rounded bg-slate-50 p-2 text-sm max-h-80 overflow-auto whitespace-pre-wrap"
+                      >
+                        {aiDisplayAnswer}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {playerData && playerData.lectureNotesUrl && (
                 
                   <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-200 shadow-sm">
                       <button className="text-sm text-blue-600 hover:underline bg-transparent border-none p-0"
@@ -546,7 +738,7 @@ const handleDownloadNotes = async () => {
                       </button>
                     </div>
                     {showNotes && (
-                      <div className="mt-3 border border-slate-200 w-full rounded-lg overflow-hidden bg-white h-72 md:h-80">
+                      <div className="mt-3 border border-slate-200 w-full rounded-lg overflow-hidden bg-white h-72 md:h-96">
                         
                         
                         <iframe
@@ -559,17 +751,20 @@ const handleDownloadNotes = async () => {
                   </div>
                 )}
               </div>
-            ) : (
-              <img src={courseData ? courseData.courseThumbnail : ""} alt="" />
-            )}
-          </div>
 
 
         </div>
-      </div>
+      <button
+        type="button"
+        onClick={() => setShowAiAssistant((prev) => !prev)}
+        className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-20 rounded-full   h-28 w-28  md:w-32 md:h-32 flex items-center justify-center text-xs md:text-sm"
+      >
+        <img className="h-full w-full rounded-full" src={assets.AI2}/>
+
+      </button>
       <Footer />
     </>
-  ):<Loading/>;
+  ) : <Loading />;
 };
 
 export default Player;
