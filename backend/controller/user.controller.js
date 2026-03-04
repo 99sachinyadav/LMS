@@ -267,7 +267,7 @@ Your purpose:
     }
 };
 
-// Run code for a programming question against its test cases (simple JS runner)
+// Run code for a programming question with custom stdin/stdout (compiler mode)
 export const runProgrammingQuestion = async (req, res) => {
     try {
         const userId = req.auth.userId;
@@ -276,7 +276,7 @@ export const runProgrammingQuestion = async (req, res) => {
         }
 
         const { courseId, questionId } = req.params;
-        const { code, language: bodyLanguage } = req.body;
+        const { code, language: bodyLanguage, stdin = "" } = req.body;
 
         if (!code || !code.trim()) {
             return res.json({ success: false, message: "Code is required" });
@@ -293,157 +293,83 @@ export const runProgrammingQuestion = async (req, res) => {
         if (!question) {
             return res.json({ success: false, message: "Question not found" });
         }
-
         const lang = (bodyLanguage || question.language || "javascript")
             .toLowerCase()
             .replace("c++", "cpp");
 
-        // JavaScript execution using Node VM
-        if (lang === "javascript") {
-            const vmModule = await import("node:vm");
-            const vm = vmModule.default || vmModule;
-            const testResults = [];
+        const languageMap = {
+            javascript: 63, // JavaScript (Node.js 12+)
+            js: 63,
+            cpp: 54, // C++ (GCC 9.2.0)
+            c: 50, // C (GCC 9.2.0)
+            java: 62, // Java (OpenJDK 13.0.1)
+            python: 71, // Python (3.8.1)
+            python3: 71,
+            go: 60, // Go (1.13.5)
+            rust: 73, // Rust (1.40.0)
+            csharp: 51, // C# (Mono 6.6.0.161)
+            php: 68, // PHP (7.4.1)
+            ruby: 72, // Ruby (2.7.0)
+            kotlin: 78, // Kotlin (1.3.70)
+            swift: 83, // Swift (5.2.3)
+            typescript: 74, // TypeScript (3.7.4)
+        };
 
-            for (const tc of question.testCases) {
-                const context = {
-                    console: {
-                        logs: [],
-                        log: function (...args) {
-                            this.logs.push(args.join(" "));
-                        },
-                    },
-                    result: null,
-                };
-
-                const scriptSource = `
-${code}
-async function __runUserSolution(input) {
-  if (typeof solve === 'function') {
-    return await solve(input);
-  }
-  if (typeof main === 'function') {
-    return await main(input);
-  }
-  throw new Error("Please define a function named solve or main");
-}
-;(async () => {
-  const _userResult = await __runUserSolution(${JSON.stringify(tc.input)});
-  result = String(_userResult);
-})();`;
-
-                let passed = false;
-                let error = null;
-                let output = "";
-                try {
-                    const script = new vm.Script(scriptSource);
-                    const vmContext = vm.createContext(context);
-                    await script.runInContext(vmContext, { timeout: 1000 });
-                    output = String(context.result ?? "");
-                    passed = output.trim() === String(tc.expectedOutput).trim();
-                } catch (e) {
-                    error = e.message || String(e);
-                }
-
-                testResults.push({
-                    input: tc.input,
-                    expectedOutput: tc.expectedOutput,
-                    output,
-                    passed,
-                    error,
-                });
-            }
-
-            const allPassed = testResults.every((t) => t.passed);
-
+        const languageId = languageMap[lang];
+        if (!languageId) {
             return res.json({
-                success: true,
-                allPassed,
-                testResults,
+                success: false,
+                message: `Language "${lang}" is not supported.`,
             });
         }
 
-        // C++ execution via Judge0-compatible API
-        if (lang === "cpp" || lang === "c++") {
-            const judgeBaseUrl = (process.env.JUDGE0_URL || "https://ce.judge0.com").replace(/\/+$/, "");
-            const submissionsUrl = `${judgeBaseUrl}/submissions?base64_encoded=true&wait=true`;
-            const languageId = 54; // C++ (GCC)
+        const judgeBaseUrl = (process.env.JUDGE0_URL || "https://ce.judge0.com").replace(/\/+$/, "");
+        const submissionsUrl = `${judgeBaseUrl}/submissions?base64_encoded=true&wait=true`;
+        const b64 = (s) => Buffer.from(String(s ?? ""), "utf8").toString("base64");
+        const unb64 = (s) => (s ? Buffer.from(String(s), "base64").toString("utf8") : "");
 
-            const b64 = (s) => Buffer.from(String(s ?? ""), "utf8").toString("base64");
-            const unb64 = (s) =>
-                s ? Buffer.from(String(s), "base64").toString("utf8") : "";
+        const body = {
+            source_code: b64(code),
+            language_id: languageId,
+            stdin: b64(String(stdin ?? "")),
+        };
 
-            const testResults = [];
+        const response = await fetch(submissionsUrl, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(body),
+        });
 
-            for (const tc of question.testCases) {
-                let passed = false;
-                let error = null;
-                let output = "";
-
-                try {
-                    const body = {
-                        source_code: b64(code),
-                        language_id: languageId,
-                        stdin: b64(String(tc.input)),
-                    };
-
-                    const response = await fetch(submissionsUrl, {
-                        method: "POST",
-                        headers: {
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify(body),
-                    });
-
-                    if (!response.ok) {
-                        const errText = await response.text().catch(() => "");
-                        throw new Error(
-                            `Judge service error: ${response.status}${errText ? ` - ${errText}` : ""}`,
-                        );
-                    }
-
-                    const result = await response.json();
-                    const status = result.status || {};
-                    const stdout = unb64(result.stdout || "");
-                    const stderr = unb64(result.stderr || "");
-                    const compileOutput = unb64(result.compile_output || "");
-
-                    output = (stdout || "").trim();
-
-                    if (status.id === 3) {
-                        // Accepted
-                        passed = output === String(tc.expectedOutput).trim();
-                    } else {
-                        passed = false;
-                        error =
-                            status.description ||
-                            (stderr || compileOutput || "Unknown error from judge");
-                    }
-                } catch (e) {
-                    error = e.message || String(e);
-                }
-
-                testResults.push({
-                    input: tc.input,
-                    expectedOutput: tc.expectedOutput,
-                    output,
-                    passed,
-                    error,
-                });
-            }
-
-            const allPassed = testResults.every((t) => t.passed);
-
-            return res.json({
-                success: true,
-                allPassed,
-                testResults,
-            });
+        if (!response.ok) {
+            const errText = await response.text().catch(() => "");
+            throw new Error(
+                `Judge service error: ${response.status}${errText ? ` - ${errText}` : ""}`,
+            );
         }
 
-        // Unsupported language
+        const result = await response.json();
+        const status = result.status || {};
+        const stdout = unb64(result.stdout || "");
+        const stderr = unb64(result.stderr || "");
+        const compileOutput = unb64(result.compile_output || "");
+        const terminalOutput = [compileOutput, stderr, stdout]
+            .filter((part) => String(part || "").length > 0)
+            .join("\n");
+
         return res.json({
-            success: false,
-            message: `Language "${question.language}" is not supported yet.`,
+            success: true,
+            runResult: {
+                statusId: status.id,
+                status: status.description || "Unknown",
+                stdout,
+                stderr,
+                compileOutput,
+                terminalOutput,
+                time: result.time || null,
+                memory: result.memory || null,
+            },
         });
     } catch (error) {
         res.json({ success: false, message: error.message });

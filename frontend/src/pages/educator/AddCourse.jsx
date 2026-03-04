@@ -33,14 +33,7 @@ const AddCourse = () => {
   const [questionForm, setQuestionForm] = useState({
     title: "",
     description: "",
-    starterCode: "",
     language: "javascript",
-    testCases: [
-      { input: "", expectedOutput: "" },
-      { input: "", expectedOutput: "" },
-      { input: "", expectedOutput: "" },
-      { input: "", expectedOutput: "" },
-    ],
   });
 
   const handleChapter = (action, chapterId) => {
@@ -155,41 +148,21 @@ const AddCourse = () => {
     }
   };
 
-  const handleTestCaseChange = (index, field, value) => {
-    setQuestionForm((prev) => {
-      const next = { ...prev };
-      const cases = [...next.testCases];
-      cases[index] = { ...cases[index], [field]: value };
-      next.testCases = cases;
-      return next;
-    });
-  };
-
-  const addTestCaseRow = () => {
-    setQuestionForm((prev) => ({
-      ...prev,
-      testCases: [...prev.testCases, { input: "", expectedOutput: "" }],
-    }));
-  };
-
   const saveProgrammingQuestion = () => {
-    const { title, description, testCases } = questionForm;
+    const { title, description, language } = questionForm;
     if (!title.trim() || !description.trim()) {
       toast.error("Enter question title and description");
-      return;
-    }
-    const filledCases = testCases.filter(
-      (tc) => tc.input.trim() && tc.expectedOutput.trim(),
-    );
-    if (filledCases.length < 4) {
-      toast.error("Please provide at least 4 complete test cases");
       return;
     }
     setProgrammingQuestions((prev) => [
       ...prev,
       {
-        ...questionForm,
-        testCases: filledCases,
+        questionId: uniqid(),
+        title: title.trim(),
+        description: description.trim(),
+        language: language || "javascript",
+        starterCode: "",
+        testCases: [],
       },
     ]);
     setIsProgrammingCourse(true);
@@ -197,14 +170,7 @@ const AddCourse = () => {
     setQuestionForm({
       title: "",
       description: "",
-      starterCode: "",
       language: "javascript",
-      testCases: [
-        { input: "", expectedOutput: "" },
-        { input: "", expectedOutput: "" },
-        { input: "", expectedOutput: "" },
-        { input: "", expectedOutput: "" },
-      ],
     });
   };
 
@@ -511,8 +477,8 @@ try {
             <div className="bg-white border border-black text-gray-700 p-4 rounded relative w-full max-w-xl max-h-[90vh] overflow-y-auto">
               <h2 className="text-lg font-semibold mb-1">Add Programming Question</h2>
               <p className="text-xs text-gray-500 mb-3">
-                Students will solve these in the course player. Provide at least 4 test
-                cases with sample input and expected output.
+                Educator only provides question title and description. Students will run
+                code with their own input directly in the compiler.
               </p>
 
               <div className="space-y-3">
@@ -529,98 +495,16 @@ try {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <p className="text-sm">Description</p>
-                    <textarea
-                      className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm min-h-[80px]"
-                      value={questionForm.description}
-                      onChange={(e) =>
-                        setQuestionForm((p) => ({ ...p, description: e.target.value }))
-                      }
-                      placeholder="Explain the problem, constraints, and what the function should return."
-                    />
-                  </div>
-                  <div>
-                    <p className="text-sm">Language</p>
-                    <select
-                      className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm bg-white"
-                      value={questionForm.language}
-                      onChange={(e) =>
-                        setQuestionForm((p) => ({ ...p, language: e.target.value }))
-                      }
-                    >
-                      <option value="javascript">JavaScript</option>
-                      <option value="cpp">C++</option>
-                    </select>
-                  </div>
-                </div>
-
                 <div>
-                  <p className="text-sm">
-                    Starter Code (optional,{" "}
-                    {questionForm.language === "cpp" ? "C++" : "JavaScript"})
-                  </p>
+                  <p className="text-sm">Description</p>
                   <textarea
-                    className="mt-1 block w-full border rounded py-2 px-3 outline-none text-xs font-mono min-h-[80px]"
-                    value={questionForm.starterCode}
+                    className="mt-1 block w-full border rounded py-2 px-3 outline-none text-sm min-h-[120px]"
+                    value={questionForm.description}
                     onChange={(e) =>
-                      setQuestionForm((p) => ({ ...p, starterCode: e.target.value }))
+                      setQuestionForm((p) => ({ ...p, description: e.target.value }))
                     }
-                    placeholder={
-                      questionForm.language === "cpp"
-                        ? `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  string input;\n  if (!getline(cin, input)) return 0;\n  // write your code using input\n  cout << input;\n  return 0;\n}`
-                        : `async function solve(input) {\n  // write your code\n  return '';\n}`
-                    }
+                    placeholder="Explain the problem. Students will compile and run with their own input."
                   />
-                </div>
-
-                <div>
-                  <p className="text-sm mb-1">Test Cases (min 4)</p>
-                  <div className="space-y-2">
-                    {questionForm.testCases.map((tc, idx) => (
-                      <div
-                        key={idx}
-                        className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs"
-                      >
-                        <div>
-                          <p className="mb-0.5 text-[11px] text-gray-600">
-                            Input #{idx + 1}
-                          </p>
-                          <input
-                            type="text"
-                            className="block w-full border rounded py-1.5 px-2 outline-none"
-                            value={tc.input}
-                            onChange={(e) =>
-                              handleTestCaseChange(idx, "input", e.target.value)
-                            }
-                            placeholder='e.g. "2 3" or "5"'
-                          />
-                        </div>
-                        <div>
-                          <p className="mb-0.5 text-[11px] text-gray-600">
-                            Expected Output #{idx + 1}
-                          </p>
-                          <input
-                            type="text"
-                            className="block w-full border rounded py-1.5 px-2 outline-none"
-                            value={tc.expectedOutput}
-                            onChange={(e) =>
-                              handleTestCaseChange(idx, "expectedOutput", e.target.value)
-                            }
-                            placeholder='e.g. "5"'
-                          />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={addTestCaseRow}
-                    className="mt-2 text-[11px] text-indigo-700 underline"
-                  >
-                    + Add another test case
-                  </button>
                 </div>
               </div>
 

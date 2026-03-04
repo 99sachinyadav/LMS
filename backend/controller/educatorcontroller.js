@@ -41,6 +41,31 @@ export const addCourse = async(req,res)=>{
         }
         if (!Array.isArray(parsedCouseData.programmingQuestions)) {
             parsedCouseData.programmingQuestions = [];
+        } else {
+            parsedCouseData.programmingQuestions = parsedCouseData.programmingQuestions.map((q) => {
+                const functionName = String(q?.functionName || "solve")
+                    .trim()
+                    .replace(/[^a-zA-Z0-9_]/g, "") || "solve";
+                const argumentNames = Array.isArray(q?.argumentNames)
+                    ? q.argumentNames
+                        .map((arg) => String(arg || "").trim().replace(/[^a-zA-Z0-9_]/g, ""))
+                        .filter(Boolean)
+                    : [];
+                const testCases = Array.isArray(q?.testCases)
+                    ? q.testCases.map((tc) => ({
+                        input: String(tc?.input ?? ""),
+                        expectedOutput: String(tc?.expectedOutput ?? ""),
+                    }))
+                    : [];
+
+                return {
+                    ...q,
+                    questionId: q?.questionId || crypto.randomUUID(),
+                    functionName,
+                    argumentNames,
+                    testCases,
+                };
+            });
         }
         const newCourse = await Course.create(parsedCouseData)
         const imageUpload = await cloudinary.uploader.upload(imageFile.path)
@@ -248,9 +273,11 @@ export const addProgrammingQuestionToCourse = async (req, res) => {
         const {
             title,
             description,
+            functionName = "solve",
+            argumentNames = [],
             starterCode,
             language = 'javascript',
-            testCases,
+            testCases = [],
         } = req.body;
 
         if (!title || !String(title).trim()) {
@@ -260,17 +287,18 @@ export const addProgrammingQuestionToCourse = async (req, res) => {
             return res.json({ success: false, message: 'Description is required' });
         }
 
-        if (!Array.isArray(testCases) || testCases.length < 4) {
-            return res.json({
-                success: false,
-                message: 'At least 4 test cases are required',
-            });
-        }
-
-        const normalisedTestCases = testCases.map((tc) => ({
+        const normalisedTestCases = (Array.isArray(testCases) ? testCases : []).map((tc) => ({
             input: String(tc.input ?? ''),
             expectedOutput: String(tc.expectedOutput ?? ''),
         }));
+        const normalizedFunctionName = String(functionName || "solve")
+            .trim()
+            .replace(/[^a-zA-Z0-9_]/g, "") || "solve";
+        const normalizedArgumentNames = Array.isArray(argumentNames)
+            ? argumentNames
+                .map((arg) => String(arg || "").trim().replace(/[^a-zA-Z0-9_]/g, ""))
+                .filter(Boolean)
+            : [];
 
         const course = await Course.findOne({ _id: courseId, educator });
         if (!course) return res.json({ success: false, message: 'Course not found' });
@@ -283,6 +311,8 @@ export const addProgrammingQuestionToCourse = async (req, res) => {
             questionId,
             title: String(title).trim(),
             description: String(description).trim(),
+            functionName: normalizedFunctionName,
+            argumentNames: normalizedArgumentNames,
             starterCode: starterCode || '',
             language,
             testCases: normalisedTestCases,

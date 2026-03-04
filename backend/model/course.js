@@ -24,18 +24,11 @@ const programmingQuestionSchema = new mongoose.Schema(
     questionId: { type: String, required: true },
     title: { type: String, required: true },
     description: { type: String, required: true },
+    functionName: { type: String, default: "solve" },
+    argumentNames: { type: [String], default: [] },
     starterCode: { type: String, default: "" },
     language: { type: String, default: "javascript" },
-    testCases: {
-      type: [testCaseSchema],
-      validate: {
-        validator: function (arr) {
-          return Array.isArray(arr) && arr.length >= 4;
-        },
-        message: "At least 4 test cases are required",
-      },
-      default: [],
-    },
+    testCases: { type: [testCaseSchema], default: [] },
   },
   { _id: false },
 );

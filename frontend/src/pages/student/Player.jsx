@@ -32,12 +32,45 @@ const Player = () => {
   const aiAnswerBoxRef = useRef(null);
   const [languageByQuestion, setLanguageByQuestion] = useState({});
   const [codeByQuestion, setCodeByQuestion] = useState({});
+  const [stdinByQuestion, setStdinByQuestion] = useState({});
   const [runResultsByQuestion, setRunResultsByQuestion] = useState({});
   const [runningQuestionId, setRunningQuestionId] = useState(null);
   const [isEditorDark, setIsEditorDark] = useState(false);
 
-  const DEFAULT_JS = `async function solve(input) {\n  // write your code here\n  return '';\n}\n`;
-  const DEFAULT_CPP = `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  string input;\n  if (!getline(cin, input)) return 0;\n  // write your code using input\n  cout << input;\n  return 0;\n}\n`;
+  const languageOptions = [
+    { key: "javascript", label: "JavaScript" },
+    { key: "cpp", label: "C++" },
+    { key: "python", label: "Python" },
+    { key: "java", label: "Java" },
+    { key: "c", label: "C" },
+    { key: "go", label: "Go" },
+    { key: "rust", label: "Rust" },
+    { key: "csharp", label: "C#" },
+    { key: "php", label: "PHP" },
+    { key: "ruby", label: "Ruby" },
+    { key: "kotlin", label: "Kotlin" },
+    { key: "swift", label: "Swift" },
+    { key: "typescript", label: "TypeScript" },
+  ];
+
+  const buildDefaultCode = (_question, lang) => {
+    const templates = {
+      javascript: `const fs = require("fs");\nconst input = fs.readFileSync(0, "utf8").trim();\n\n// write your logic here\nconsole.log(input);\n`,
+      cpp: `#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n  ios::sync_with_stdio(false);\n  cin.tie(nullptr);\n\n  string input;\n  getline(cin, input);\n  cout << input;\n  return 0;\n}\n`,
+      python: `import sys\ninput_data = sys.stdin.read().strip()\n\n# write your logic here\nprint(input_data)\n`,
+      java: `import java.util.*;\n\npublic class Main {\n  public static void main(String[] args) {\n    Scanner sc = new Scanner(System.in);\n    String input = sc.hasNextLine() ? sc.nextLine() : "";\n    System.out.println(input);\n  }\n}\n`,
+      c: `#include <stdio.h>\n\nint main() {\n  char input[1000];\n  if (fgets(input, sizeof(input), stdin)) {\n    printf("%s", input);\n  }\n  return 0;\n}\n`,
+      go: `package main\n\nimport (\n  "bufio"\n  "fmt"\n  "os"\n)\n\nfunc main() {\n  in := bufio.NewScanner(os.Stdin)\n  if in.Scan() {\n    fmt.Println(in.Text())\n  }\n}\n`,
+      rust: `use std::io::{self, Read};\n\nfn main() {\n    let mut input = String::new();\n    io::stdin().read_to_string(&mut input).unwrap();\n    println!("{}", input.trim());\n}\n`,
+      csharp: `using System;\n\npublic class Program {\n  public static void Main() {\n    var input = Console.ReadLine() ?? "";\n    Console.WriteLine(input);\n  }\n}\n`,
+      php: `<?php\n$input = trim(stream_get_contents(STDIN));\necho $input . PHP_EOL;\n`,
+      ruby: `input = STDIN.read.strip\nputs input\n`,
+      kotlin: `fun main() {\n  val input = readLine() ?: ""\n  println(input)\n}\n`,
+      swift: `import Foundation\nif let input = readLine() {\n  print(input)\n}\n`,
+      typescript: `import * as fs from "fs";\nconst input = fs.readFileSync(0, "utf8").trim();\nconsole.log(input);\n`,
+    };
+    return templates[lang] || templates.javascript;
+  };
 
   const getSelectedLanguage = (question) => {
     if (!question) return "javascript";
@@ -126,17 +159,15 @@ const Player = () => {
     const qid = question.questionId;
     const lang = getSelectedLanguage(question);
     const codeKey = getCodeKey(qid, lang);
-    const qLang = (question.language || "javascript").toLowerCase().replace("c++", "cpp");
-    const starter = lang === "cpp"
-      ? (question.starterCode && qLang === "cpp" ? question.starterCode : DEFAULT_CPP)
-      : (question.starterCode && qLang !== "cpp" ? question.starterCode : DEFAULT_JS);
+    const starter = question.starterCode || buildDefaultCode(question, lang);
     const code = codeByQuestion[codeKey] ?? starter;
+    const stdin = stdinByQuestion[qid] ?? "";
     setRunningQuestionId(qid);
     try {
       const token = await getToken();
       const { data } = await axios.post(
         `${backendUrl}/api/user/course/${courseId}/programming-questions/${qid}/run`,
-        { code, language: lang },
+        { code, language: lang, stdin },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -149,9 +180,9 @@ const Player = () => {
       setRunResultsByQuestion((prev) => ({
         ...prev,
         [qid]: {
-          code,
-          allPassed: data.allPassed,
-          testResults: data.testResults || [],
+          language: lang,
+          stdin,
+          runResult: data.runResult || null,
           error: !data.success ? data.message : null,
         },
       }));
@@ -418,157 +449,143 @@ const handleDownloadNotes = async () => {
                   ))}
                 </div>
 
-                {selectedQuestion && (() => {
+                                {selectedQuestion && (() => {
                   const qid = selectedQuestion.questionId;
                   const lang = getSelectedLanguage(selectedQuestion);
                   const codeKey = getCodeKey(qid, lang);
-                  const qLang = (selectedQuestion.language || "javascript").toLowerCase().replace("c++", "cpp");
-                  const starter = lang === "cpp"
-                    ? (selectedQuestion.starterCode && qLang === "cpp" ? selectedQuestion.starterCode : DEFAULT_CPP)
-                    : (selectedQuestion.starterCode && qLang !== "cpp" ? selectedQuestion.starterCode : DEFAULT_JS);
+                  const starter = selectedQuestion.starterCode || buildDefaultCode(selectedQuestion, lang);
                   return (
-                  <div className="mt-2 space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-slate-800">
-                        {selectedQuestion.title}
-                      </p>
-                      <p className="text-xs text-slate-600 mt-1 whitespace-pre-line">
-                        {selectedQuestion.description}
-                      </p>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="text-xs font-semibold text-slate-700">
-                          Compiler
+                    <div className="mt-2 space-y-3">
+                      <div>
+                        <p className="text-sm font-medium text-slate-800">
+                          {selectedQuestion.title}
                         </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setIsEditorDark((prev) => !prev)}
-                            className="px-3 py-1.5 text-xs rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-                          >
-                            {isEditorDark ? "Light Editor" : "Dark Editor"}
-                          </button>
-                          <div className="flex rounded overflow-hidden border border-slate-200">
+                        <p className="text-xs text-slate-600 mt-1 whitespace-pre-line">
+                          {selectedQuestion.description}
+                        </p>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-semibold text-slate-700">
+                            Compiler
+                          </p>
+                          <div className="flex items-center gap-2">
                             <button
                               type="button"
-                              onClick={() => handleLanguageSwitch(qid, "javascript")}
-                              className={`px-3 py-1.5 text-xs font-medium ${
-                                lang === "javascript"
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
+                              onClick={() => setIsEditorDark((prev) => !prev)}
+                              className="px-3 py-1.5 text-xs rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
                             >
-                              JavaScript
+                              {isEditorDark ? "Light Editor" : "Dark Editor"}
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => handleLanguageSwitch(qid, "cpp")}
-                              className={`px-3 py-1.5 text-xs font-medium ${
-                                lang === "cpp"
-                                  ? "bg-blue-600 text-white"
-                                  : "bg-white text-slate-600 hover:bg-slate-50"
-                              }`}
+                            <select
+                              value={lang}
+                              onChange={(e) => handleLanguageSwitch(qid, e.target.value)}
+                              className="px-2 py-1.5 text-xs rounded border border-slate-300 bg-white text-slate-700"
                             >
-                              C++
-                            </button>
+                              {languageOptions.map((opt) => (
+                                <option key={opt.key} value={opt.key}>
+                                  {opt.label}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                         </div>
+                        <textarea
+                          spellCheck={false}
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          className={`w-full border rounded-md text-sm font-mono p-3 min-h-[180px] outline-none focus:outline-none focus:ring-0 ${
+                            isEditorDark
+                              ? "bg-slate-900 text-white border-slate-700 placeholder:text-slate-400"
+                              : "bg-white text-slate-800 border-slate-300"
+                          }`}
+                          value={codeByQuestion[codeKey] ?? starter}
+                          onChange={(e) =>
+                            handleCodeChange(qid, lang, e.target.value)
+                          }
+                          onKeyDown={(e) =>
+                            handleCodeKeyDown(
+                              qid,
+                              lang,
+                              codeByQuestion[codeKey] ?? starter,
+                              e,
+                            )
+                          }
+                        />
                       </div>
-                      <textarea
-                        spellCheck={false}
-                        autoCorrect="off"
-                        autoCapitalize="off"
-                        className={`w-full border rounded-md text-sm font-mono p-3 min-h-[180px] outline-none focus:outline-none focus:ring-0 ${
-                          isEditorDark
-                            ? "bg-slate-900 text-white border-slate-700 placeholder:text-slate-400"
-                            : "bg-white text-slate-800 border-slate-300"
-                        }`}
-                        value={codeByQuestion[codeKey] ?? starter}
-                        onChange={(e) =>
-                          handleCodeChange(qid, lang, e.target.value)
-                        }
-                        onKeyDown={(e) =>
-                          handleCodeKeyDown(
-                            qid,
-                            lang,
-                            codeByQuestion[codeKey] ?? starter,
-                            e,
-                          )
-                        }
-                      />
-                    </div>
 
-                    <div className="flex items-center justify-between">
-                      <p className="text-[11px] text-slate-500">
-                        {lang === "cpp"
-                          ? "C++: read input from stdin, print result to stdout."
-                          : "JavaScript: define solve(input) or main(input) and return the output string."}{" "}
-                        Tested against {selectedQuestion.testCases?.length || 0} test cases.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={handleRunCode}
-                        disabled={runningQuestionId === selectedQuestion.questionId}
-                        className="px-4 py-1.5 rounded bg-blue-600 text-white text-xs disabled:opacity-60"
-                      >
-                        {runningQuestionId === selectedQuestion.questionId
-                          ? "Running..."
-                          : "Run Code"}
-                      </button>
-                    </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-700 mb-2">
+                          Terminal Input (stdin)
+                        </p>
+                        <textarea
+                          spellCheck={false}
+                          autoCorrect="off"
+                          autoCapitalize="off"
+                          className={`w-full border rounded-md text-sm font-mono p-3 min-h-[90px] outline-none focus:outline-none focus:ring-0 ${
+                            isEditorDark
+                              ? "bg-slate-900 text-white border-slate-700 placeholder:text-slate-400"
+                              : "bg-white text-slate-800 border-slate-300"
+                          }`}
+                          value={stdinByQuestion[qid] ?? ""}
+                          onChange={(e) =>
+                            setStdinByQuestion((prev) => ({ ...prev, [qid]: e.target.value }))
+                          }
+                          placeholder="Type input exactly as stdin."
+                        />
+                      </div>
 
-                    {currentRunResult && (
-                      <div className="mt-2 border border-slate-200 rounded-md bg-white p-2">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-xs font-semibold text-slate-800">
-                            Test Results
-                          </p>
-                          <span
-                            className={`text-[11px] font-medium ${
-                              currentRunResult.allPassed
-                                ? "text-green-600"
-                                : "text-amber-600"
-                            }`}
-                          >
-                            {currentRunResult.allPassed
-                              ? "All test cases passed"
-                              : "Some test cases failed"}
-                          </span>
-                        </div>
-                        <div className="max-h-40 overflow-auto text-[11px] space-y-1">
-                          {currentRunResult.testResults?.map((t, idx) => (
-                            <div
-                              key={idx}
-                              className="border border-slate-100 rounded p-1 bg-slate-50"
-                            >
-                              <div className="flex items-center justify-between">
-                                <span className="font-medium">
-                                  Case {idx + 1}{" "}
-                                  <span
-                                    className={
-                                      t.passed ? "text-green-600" : "text-red-600"
-                                    }
-                                  >
-                                    {t.passed ? "✓" : "✕"}
-                                  </span>
-                                </span>
-                              </div>
-                              <div>Input: {t.input}</div>
-                              <div>Expected: {t.expectedOutput}</div>
-                              <div>Output: {t.output}</div>
-                              {t.error && (
-                                <div className="text-red-600">
-                                  Error: {t.error}
-                                </div>
-                              )}
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] text-slate-500">
+                          Enter input exactly like terminal stdin. Output/errors appear below.
+                        </p>
+                        <button
+                          type="button"
+                          onClick={handleRunCode}
+                          disabled={runningQuestionId === selectedQuestion.questionId}
+                          className="px-4 py-1.5 rounded bg-blue-600 text-white text-xs disabled:opacity-60"
+                        >
+                          {runningQuestionId === selectedQuestion.questionId
+                            ? "Running..."
+                            : "Run Code"}
+                        </button>
+                      </div>
+
+                      {currentRunResult && (
+                        <div className="mt-2 border border-slate-200 rounded-md bg-white p-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-xs font-semibold text-slate-800">
+                              Run Result
+                            </p>
+                            <span className="text-[11px] font-medium text-slate-600">
+                              {currentRunResult.runResult?.status || "Unknown"}
+                            </span>
+                          </div>
+                          <div className="max-h-56 overflow-auto text-[11px] space-y-2">
+                            <div className="border border-slate-100 rounded p-2 bg-slate-950 text-slate-100">
+                              <div className="font-semibold mb-1 text-slate-300">Terminal Session</div>
+                              <pre className="whitespace-pre-wrap break-all">
+                                {`${(currentRunResult.stdin || "")
+                                  .split("\n")
+                                  .filter((line) => line.length > 0)
+                                  .map((line) => `> ${line}`)
+                                  .join("\n")}${
+                                  currentRunResult.stdin ? "\n" : ""
+                                }${currentRunResult.runResult?.terminalOutput || "(no output)"}`}
+                              </pre>
                             </div>
-                          ))}
+                            <div className="text-[10px] text-slate-500">
+                              Time: {currentRunResult.runResult?.time || "-"}s | Memory:{" "}
+                              {currentRunResult.runResult?.memory || "-"} KB
+                            </div>
+                            {currentRunResult.error && (
+                              <div className="text-red-600">Error: {currentRunResult.error}</div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
                   );
                 })()}
               </div>
@@ -768,3 +785,4 @@ const handleDownloadNotes = async () => {
 };
 
 export default Player;
+
